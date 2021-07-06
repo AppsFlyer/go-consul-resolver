@@ -1,0 +1,10 @@
+.tools/
+bin/*
+builds/*
+.#*
+.idea/
+.DS_Store
+*.iml
+.gopath/
+.testCoverage*.txt
+.githooks/
