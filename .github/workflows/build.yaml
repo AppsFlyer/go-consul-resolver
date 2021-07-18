@@ -1,5 +1,5 @@
-name: DIND Example
-on: push
+name: go-consul-resolver_pull-request
+on: pull_request
 
 jobs:
   # Label of the container job
