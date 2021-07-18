@@ -44,12 +44,7 @@ func (s *Suite) SetupSuite() {
 	serviceContainers := startServiceContainers(s.T(), 3, dockerNetwork)
 	s.serviceContainers = append(s.serviceContainers, serviceContainers...)
 
-	consulPort, err := consulContainer.MappedPort(context.Background(), "8500")
-
-	if err != nil {
-		s.T().Fatal(err)
-	}
-	consulClient, err := api.NewClient(&api.Config{Address: fmt.Sprintf("%s:%d", consulName, consulPort.Int())})
+	consulClient, err := api.NewClient(&api.Config{Address: fmt.Sprintf("%s:%d", consulName, consulPort)})
 	if err != nil {
 		s.T().Fatal(err)
 	}
