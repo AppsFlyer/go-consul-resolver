@@ -1,4 +1,4 @@
-name: go-consul-resolver_pull-request
+name: go-consul-resolver
 on: pull_request
 
 jobs:
