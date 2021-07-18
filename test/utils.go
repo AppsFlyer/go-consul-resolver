@@ -3,29 +3,11 @@ package test
 import (
 	"context"
 	"fmt"
-	"net/url"
-	"os"
 	"testing"
 
 	"github.com/hashicorp/consul/api"
 	"github.com/testcontainers/testcontainers-go"
 )
-
-func createNetwork(name string) (testcontainers.Network, error) {
-	provider, err := testcontainers.NewDockerProvider()
-	if err != nil {
-		return nil, err
-	}
-
-	nreq := testcontainers.NetworkRequest{
-		Internal:   false,
-		Name:       name,
-		Attachable: true,
-		SkipReaper: true,
-	}
-
-	return provider.CreateNetwork(context.Background(), nreq)
-}
 
 func startConsulContainer(t *testing.T, network string) testcontainers.Container {
 	req := &testcontainers.ContainerRequest{
@@ -70,26 +52,12 @@ func deregisterServiceInConsul(name string, client *api.Client) error {
 	return client.Agent().ServiceDeregister(name)
 }
 
-func registerServiceInConsul(id int, name string, tags []string, c testcontainers.Container, client *api.Client) error {
-	port, err := c.MappedPort(context.Background(), "8080")
-	if err != nil {
-		return err
-	}
-
+func registerServiceInConsul(id int, name string, tags []string, client *api.Client) error {
 	return client.Agent().ServiceRegister(&api.AgentServiceRegistration{
 		ID:      fmt.Sprintf("%d", id),
 		Name:    name,
-		Port:    port.Int(),
-		Address: getDockerHost(),
+		Port:    8080,
+		Address: fmt.Sprintf("service_%d", id),
 		Tags:    tags,
 	})
-}
-
-func getDockerHost() string {
-	host := os.Getenv("DOCKER_HOST")
-	if host != "" {
-		dockerURL, _ := url.Parse(host)
-		return dockerURL.Hostname()
-	}
-	return "localhost"
 }
