@@ -6,24 +6,26 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"os"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/hashicorp/consul/api"
 	"github.com/stretchr/testify/suite"
 	"github.com/testcontainers/testcontainers-go"
 	httpconsulresolver "gitlab.appsflyer.com/go/http-consul-resolver"
+	lb "gitlab.appsflyer.com/go/http-consul-resolver/lb"
 )
 
 const (
 	serviceName = "hello-service"
+	consulName  = "consul"
+	consulPort  = 8500
 )
 
 type Suite struct {
 	suite.Suite
-	network           testcontainers.Network
 	serviceContainers []testcontainers.Container
 	consulContainer   testcontainers.Container
 	consulClient      *api.Client
@@ -31,25 +33,18 @@ type Suite struct {
 
 func (s *Suite) SetupSuite() {
 
-	dockerNetwork, _ := uuid.NewRandom()
-	network, err := createNetwork(dockerNetwork.String())
-	if err != nil {
-		s.T().Fatal(err)
+	dockerNetwork := os.Getenv("DOCKER_NETWORK")
+	if dockerNetwork == "" {
+		s.T().Fatal("could not determine docker network")
 	}
-	s.network = network
 
-	consulContainer := startConsulContainer(s.T(), dockerNetwork.String())
+	consulContainer := startConsulContainer(s.T(), dockerNetwork)
 	s.consulContainer = consulContainer
 
-	serviceContainers := startServiceContainers(s.T(), 3, dockerNetwork.String())
+	serviceContainers := startServiceContainers(s.T(), 3, dockerNetwork)
 	s.serviceContainers = append(s.serviceContainers, serviceContainers...)
 
-	consulPort, err := consulContainer.MappedPort(context.Background(), "8500")
-
-	if err != nil {
-		s.T().Fatal(err)
-	}
-	consulClient, err := api.NewClient(&api.Config{Address: fmt.Sprintf("%s:%d", getDockerHost(), consulPort.Int())})
+	consulClient, err := api.NewClient(&api.Config{Address: fmt.Sprintf("%s:%d", consulName, consulPort)})
 	if err != nil {
 		s.T().Fatal(err)
 	}
@@ -61,8 +56,7 @@ func (s *Suite) TearDownSuite() {
 	for i := 0; i < len(s.serviceContainers); i++ {
 		_ = s.serviceContainers[i].Terminate(ctx)
 	}
-
-	_ = s.network.Remove(ctx)
+	_ = s.consulContainer.Terminate(ctx)
 }
 
 func (s *Suite) TearDownTest() {
@@ -75,8 +69,8 @@ func (s *Suite) TearDownTest() {
 
 func (s *Suite) TestRoundRobinLoadBalancedClient() {
 
-	for i, c := range s.serviceContainers {
-		if err := registerServiceInConsul(i, serviceName, nil, c, s.consulClient); err != nil {
+	for i := range s.serviceContainers {
+		if err := registerServiceInConsul(i, serviceName, nil, s.consulClient); err != nil {
 			s.T().Fatal(err)
 		}
 	}
@@ -88,18 +82,14 @@ func (s *Suite) TestRoundRobinLoadBalancedClient() {
 		10*time.Second,
 		1*time.Second)
 
-	consulPort, err := s.consulContainer.MappedPort(context.Background(), "8500")
-	if err != nil {
-		s.T().Fatal(err)
-	}
-
+	consulClient, _ := api.NewClient(&api.Config{Address: fmt.Sprintf("%s:%d", consulName, consulPort)})
 	coolServiceResolver, _ := httpconsulresolver.NewConsulResolver(context.Background(), httpconsulresolver.ConsulResolverConfig{
 		Log: log.Printf,
 		ServiceSpec: httpconsulresolver.ServiceSpec{
 			ServiceName: serviceName,
 		},
-		Balancer: &httpconsulresolver.RoundRobinLoadBalancer{},
-		Client:   &api.Config{Address: fmt.Sprintf("%s:%d", getDockerHost(), consulPort.Int())},
+		Balancer: &lb.RoundRobinLoadBalancer{},
+		Client:   consulClient,
 	})
 
 	transport, _ := httpconsulresolver.NewLoadBalancedTransport(
@@ -117,8 +107,8 @@ func (s *Suite) TestRoundRobinLoadBalancedClient() {
 func (s *Suite) TestTagAwareLoadBalancedClient() {
 
 	// Register each service with a different tag
-	for i, c := range s.serviceContainers {
-		if err := registerServiceInConsul(i, serviceName, []string{fmt.Sprintf("%d", i)}, c, s.consulClient); err != nil {
+	for i := range s.serviceContainers {
+		if err := registerServiceInConsul(i, serviceName, []string{fmt.Sprintf("%d", i)}, s.consulClient); err != nil {
 			s.T().Fatal(err)
 		}
 	}
@@ -130,18 +120,14 @@ func (s *Suite) TestTagAwareLoadBalancedClient() {
 		10*time.Second,
 		1*time.Second)
 
-	consulPort, err := s.consulContainer.MappedPort(context.Background(), "8500")
-	if err != nil {
-		s.T().Fatal(err)
-	}
-
+	consulClient, _ := api.NewClient(&api.Config{Address: fmt.Sprintf("%s:%d", consulName, consulPort)})
 	coolServiceResolver, _ := httpconsulresolver.NewConsulResolver(context.Background(), httpconsulresolver.ConsulResolverConfig{
 		Log: log.Printf,
 		ServiceSpec: httpconsulresolver.ServiceSpec{
 			ServiceName: serviceName,
 		},
-		Balancer: &httpconsulresolver.TagAwareLoadBalancer{Tags: []string{"1"}, FallbackAllowed: true},
-		Client:   &api.Config{Address: fmt.Sprintf("%s:%d", getDockerHost(), consulPort.Int())},
+		Balancer: &lb.TagAwareLoadBalancer{Tags: []string{"1"}, FallbackAllowed: true},
+		Client:   consulClient,
 	})
 
 	transport, _ := httpconsulresolver.NewLoadBalancedTransport(

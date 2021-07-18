@@ -58,9 +58,9 @@ type ConsulResolverConfig struct {
 	// Optional
 	// Default: RoundRobinLoadBalancer
 	Balancer Balancer
-	// The consul client configuration
+	// The consul client
 	// Mandatory
-	Client *api.Config
+	Client *api.Client
 	// The consul query options configuration
 	// Optional
 	Query *api.QueryOptions

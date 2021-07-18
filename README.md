@@ -1,4 +1,5 @@
 # HTTP Client Side Load Balancer
+[![Actions Status](https://github.com/AppsFlyer/go-consul-resolver/workflows/go-consul-resolver/badge.svg)](https://github.com/AppsFlyer/go-consul-resolver/actions)
 
 A library of composable layers that is designed to provide client-side load balancing for (but not limited to) HTTP client-server communication
 
@@ -50,7 +51,7 @@ the resolver will become stale and will immediately return an error (based on th
 The configuration allows specifying the following parameters:
 * ServiceSpec - the spec of the service being resolved (service name, port, etc.)
 * Balancer - the load balancer to use
-* Client - the Consul client configuration (at a minimum, you must specify the `Address` field)
+* Client - a Consul API client
 * Query - the Consul query options, if you wish to override the defaults
 * LogFn - A custom logging function
 
@@ -87,40 +88,37 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 
 	"github.com/hashicorp/consul/api"
-	logger "gitlab.appsflyer.com/go/af-go-logger/v1"
 
 	httpbalancer "gitlab.appsflyer.com/go/http-consul-resolver"
+	"gitlab.appsflyer.com/go/http-consul-resolver/lb"
 )
 
 func main() {
 
-	// Use af-go-logger
-	log := logger.NewLogger(logger.WithName("lb-http-client"))
-
+	consulClient, _ := api.NewClient(&api.Config{Address: "localhost:8500")})
 	coolServiceResolver, _ := httpbalancer.NewConsulResolver(context.Background(), httpbalancer.ConsulResolverConfig{
-        Log: log.Debugf,
-        ServiceSpec: httpbalancer.ServiceSpec{
+		ServiceSpec: httpbalancer.ServiceSpec{
 			ServiceName: "cool-service",
 		},
-        Balancer:httpbalancer.TagAwareLoadBalancer{
-            Tags:[]string{"az-eu-west-1c", "az-eu-east-1c"},
-        },
-        Client: &api.Config{Address: "localhost:8500"},
-})
- 
-	
+		Balancer: &lb.TagAwareLoadBalancer{
+			Tags: []string{"az-eu-west-1c", "az-eu-east-1c"},
+		},
+		//Balancer: &lb.TagAwareLoadBalancer{
+		//	Tags: []string{"az-eu-west-1c", "az-eu-east-1c"},
+		//},
+		Client: consulClient,
+	})
+
 	transport, _ := httpbalancer.NewLoadBalancedTransport(
-                httpbalancer.Config{
-                	Resolvers: []httpbalancer.Resolver{coolServiceResolver},
-                	Log: log.Debugf,
-                })
+		httpbalancer.Config{
+			Resolvers: []httpbalancer.Resolver{coolServiceResolver},
+		})
 
 	client := &http.Client{Transport: transport}
-    
+
 	// this will resolve via Consul
 	res, _ := client.Get("http://cool-service/_/health.json")
 

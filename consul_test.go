@@ -9,6 +9,7 @@ import (
 
 	"github.com/hashicorp/consul/api"
 	"github.com/stretchr/testify/assert"
+	"gitlab.appsflyer.com/go/http-consul-resolver/lb"
 )
 
 type MockClient struct {
@@ -55,7 +56,7 @@ func TestConsulResolver(t *testing.T) {
 	r := &ServiceResolver{
 		client:    c,
 		ctx:       context.Background(),
-		balancer:  &RoundRobinLoadBalancer{},
+		balancer:  &lb.RoundRobinLoadBalancer{},
 		spec:      ServiceSpec{ServiceName: "service"},
 		queryOpts: &api.QueryOptions{},
 		log:       log.Printf,

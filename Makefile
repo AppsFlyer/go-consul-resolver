@@ -1,26 +1,15 @@
 LOCAL_GOPATH=${ROOT_DIR}/.gopath
 BIN_DIR := .tools/bin
-GOLANGCI_LINT_VERSION := 1.31.0
+GOLANGCI_LINT_VERSION := 1.40.1
 GOLANGCI_LINT := $(BIN_DIR)/golangci-lint_$(GOLANGCI_LINT_VERSION)
 
-all: build test lint
-
-tidy:
-	go mod tidy -v
+.PHONY: test
 
 build:
 	go build ./...
 
 test:
-	go test -race $$(go list ./... | grep -v test) -v -coverprofile .testCoverage.txt
-
-e2e-test:
-	go test -race $$(go list ./... | grep test) -v -coverprofile .e2e.testCoverage.txt
-
-setup: setup-git-hooks
-
-setup-git-hooks:
-	git config core.hooksPath .githooks
+	go test -race $$(go list ./...) -v -coverprofile .testCoverage.txt
 
 lint: $(GOLANGCI_LINT)
 	$(GOLANGCI_LINT) run --fast

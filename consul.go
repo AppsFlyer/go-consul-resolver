@@ -11,6 +11,7 @@ import (
 	"github.com/cenkalti/backoff/v4"
 	"github.com/friendsofgo/errors"
 	"github.com/hashicorp/consul/api"
+	"gitlab.appsflyer.com/go/http-consul-resolver/lb"
 	"go.uber.org/ratelimit"
 )
 
@@ -40,12 +41,12 @@ type ServiceResolver struct {
 // conf - the resolver's config
 func NewConsulResolver(ctx context.Context, conf ConsulResolverConfig) (*ServiceResolver, error) {
 
+	if conf.Client == nil {
+		return nil, errors.New("consul client must not be nil")
+	}
+
 	if conf.ServiceSpec.ServiceName == "" {
 		return nil, errors.New("service name must not be empty")
-	}
-	client, err := api.NewClient(conf.Client)
-	if err != nil {
-		return nil, err
 	}
 
 	if conf.Query == nil {
@@ -55,7 +56,7 @@ func NewConsulResolver(ctx context.Context, conf ConsulResolverConfig) (*Service
 	}
 
 	if conf.Balancer == nil {
-		conf.Balancer = &RoundRobinLoadBalancer{}
+		conf.Balancer = &lb.RoundRobinLoadBalancer{}
 	}
 
 	if conf.Log == nil {
@@ -67,7 +68,7 @@ func NewConsulResolver(ctx context.Context, conf ConsulResolverConfig) (*Service
 		ctx:       ctx,
 		queryOpts: conf.Query,
 		spec:      conf.ServiceSpec,
-		client:    client.Health(),
+		client:    conf.Client.Health(),
 		balancer:  conf.Balancer,
 		init:      make(chan struct{}),
 		initDone:  sync.Once{},
