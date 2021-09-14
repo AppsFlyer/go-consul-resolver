@@ -1,0 +1,23 @@
+name: go-consul-resolver
+on: [push, pull_request]
+
+jobs:
+  # Label of the container job
+  container-job:
+    # Containers must run in Linux based operating systems
+    runs-on: ubuntu-latest
+    # Docker Hub image that `container-job` executes in
+    container: golang:1.16
+
+    steps:
+      # Downloads a copy of the code in your repository before running CI tests
+      - name: Check out repository code
+        uses: actions/checkout@v2
+
+      - name: Lint
+        run: make lint
+
+      - name: Test
+        run: make test
+        env:
+          DOCKER_NETWORK: ${{ job.container.network }}
