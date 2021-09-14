@@ -16,11 +16,12 @@ import (
 )
 
 // Balancer interface provides methods for selecting a target and updating its state
-// Select returns a *api.ServiceEntry describing the selected target. If Select failed to provide a viable target, it should return a non-nil error.
-// 	Note: Select must be non-blocking!
-// UpdateTargets will be called periodically to refresh the Balancer's targets list from which the Balancer is allowed to select
 type Balancer interface {
+	// Select returns a *api.ServiceEntry describing the selected target.
+	// If Select failed to provide a viable target, it should return a non-nil error.
+	// Important: Select must be non-blocking!
 	Select() (*api.ServiceEntry, error)
+	// UpdateTargets will be called periodically to refresh the Balancer's targets list from which the Balancer is allowed to select
 	UpdateTargets(targets []*api.ServiceEntry)
 }
 
