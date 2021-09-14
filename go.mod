@@ -1,4 +1,4 @@
-module gitlab.appsflyer.com/go/http-consul-resolver
+module github.com/AppsFlyer/http-consul-resolver
 
 go 1.15
 
