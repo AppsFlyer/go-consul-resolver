@@ -4,7 +4,8 @@
 
 A library of composable layers that is designed to provide client-side load balancing for (but not limited to) HTTP client-server communication, using Consul as the service discovery layer
 
-[Example Usage](#Example)
+[Example Usage](#Example)  
+(See advanced usage patterns in the `test` package)
 
 ## Components
 
@@ -109,9 +110,6 @@ func main() {
 		Balancer: &lb.TagAwareLoadBalancer{
 			Tags: []string{"az-eu-west-1c", "az-eu-east-1c"},
 		},
-		//Balancer: &lb.TagAwareLoadBalancer{
-		//	Tags: []string{"az-eu-west-1c", "az-eu-east-1c"},
-		//},
 		Client: consulClient,
 	})
 
