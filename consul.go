@@ -8,18 +8,23 @@ import (
 	"sync"
 	"time"
 
+	"github.com/AppsFlyer/go-consul-resolver/lb"
 	"github.com/cenkalti/backoff/v4"
 	"github.com/friendsofgo/errors"
 	"github.com/hashicorp/consul/api"
-	"gitlab.appsflyer.com/go/http-consul-resolver/lb"
 	"go.uber.org/ratelimit"
 )
 
+// Balancer interface provides methods for selecting a target and updating its state
+// Select returns a *api.ServiceEntry describing the selected target. If Select failed to provide a viable target, it should return a non-nil error.
+// 	Note: Select must be non-blocking!
+// UpdateTargets will be called periodically to refresh the Balancer's targets list from which the Balancer is allowed to select
 type Balancer interface {
 	Select() (*api.ServiceEntry, error)
 	UpdateTargets(targets []*api.ServiceEntry)
 }
 
+// ServiceProvider provides a method for obtaining a list of *api.ServiceEntry entities from Consul
 type ServiceProvider interface {
 	ServiceMultipleTags(service string, tags []string, passingOnly bool, q *api.QueryOptions) ([]*api.ServiceEntry, *api.QueryMeta, error)
 }

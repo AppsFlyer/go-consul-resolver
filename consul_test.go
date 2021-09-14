@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/AppsFlyer/go-consul-resolver/lb"
 	"github.com/hashicorp/consul/api"
 	"github.com/stretchr/testify/assert"
-	"gitlab.appsflyer.com/go/http-consul-resolver/lb"
 )
 
 type MockClient struct {

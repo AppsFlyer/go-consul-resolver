@@ -11,11 +11,11 @@ import (
 	"testing"
 	"time"
 
+	httpconsulresolver "github.com/AppsFlyer/go-consul-resolver"
+	"github.com/AppsFlyer/go-consul-resolver/lb"
 	"github.com/hashicorp/consul/api"
 	"github.com/stretchr/testify/suite"
 	"github.com/testcontainers/testcontainers-go"
-	httpconsulresolver "gitlab.appsflyer.com/go/http-consul-resolver"
-	lb "gitlab.appsflyer.com/go/http-consul-resolver/lb"
 )
 
 const (

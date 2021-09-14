@@ -1,7 +1,7 @@
 # HTTP Client Side Load Balancer
 [![Actions Status](https://github.com/AppsFlyer/go-consul-resolver/workflows/go-consul-resolver/badge.svg)](https://github.com/AppsFlyer/go-consul-resolver/actions)
 
-A library of composable layers that is designed to provide client-side load balancing for (but not limited to) HTTP client-server communication
+A library of composable layers that is designed to provide client-side load balancing for (but not limited to) HTTP client-server communication, using Consul as the service discovery layer
 
 ## Components
 
@@ -92,8 +92,8 @@ import (
 
 	"github.com/hashicorp/consul/api"
 
-	httpbalancer "gitlab.appsflyer.com/go/http-consul-resolver"
-	"gitlab.appsflyer.com/go/http-consul-resolver/lb"
+	httpbalancer "github.com/AppsFlyer/go-consul-resolver"
+	"github.com/AppsFlyer/go-consul-resolver/lb"
 )
 
 func main() {
