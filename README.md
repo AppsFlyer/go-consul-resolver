@@ -1,5 +1,5 @@
 # HTTP Client Side Load Balancer
-[![Actions Status](https://github.com/AppsFlyer/go-consul-resolver/workflows/go-consul-resolver/badge.svg)](https://github.com/AppsFlyer/go-consul-resolver/actions)
+[![Actions Status](https://github.com/AppsFlyer/go-consul-resolver/workflows/go-consul-resolver/badge.svg?branch=main)](https://github.com/AppsFlyer/go-consul-resolver/actions)
 
 A library of composable layers that is designed to provide client-side load balancing for (but not limited to) HTTP client-server communication, using Consul as the service discovery layer
 
