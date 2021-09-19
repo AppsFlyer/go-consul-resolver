@@ -1,4 +1,4 @@
-# HTTP Client Side Load Balancer
+# Go Consul Resolver
 [![Actions Status](https://github.com/AppsFlyer/go-consul-resolver/workflows/go-consul-resolver/badge.svg?branch=main)](https://github.com/AppsFlyer/go-consul-resolver/actions)
 [![Godocs](https://img.shields.io/badge/golang-documentation-blue.svg)](https://pkg.go.dev/github.com/AppsFlyer/go-consul-resolver)
 
