@@ -31,14 +31,16 @@ type ServiceProvider interface {
 }
 
 type ServiceResolver struct {
-	log       LogFn
-	ctx       context.Context
-	client    ServiceProvider
-	queryOpts *api.QueryOptions
-	balancer  Balancer
-	spec      ServiceSpec
-	init      chan struct{}
-	initDone  sync.Once
+	log                  LogFn
+	ctx                  context.Context
+	client               ServiceProvider
+	queryOpts            *api.QueryOptions
+	balancer             Balancer
+	spec                 ServiceSpec
+	prioritizedInstances [][]*api.ServiceEntry
+	mu                   sync.Mutex
+	init                 chan struct{}
+	initDone             sync.Once
 }
 
 // NewConsulResolver creates a new Consul Resolver
@@ -70,17 +72,21 @@ func NewConsulResolver(ctx context.Context, conf ResolverConfig) (*ServiceResolv
 	}
 
 	resolver := &ServiceResolver{
-		log:       conf.Log,
-		ctx:       ctx,
-		queryOpts: conf.Query,
-		spec:      conf.ServiceSpec,
-		client:    conf.Client.Health(),
-		balancer:  conf.Balancer,
-		init:      make(chan struct{}),
-		initDone:  sync.Once{},
+		log:                  conf.Log,
+		ctx:                  ctx,
+		queryOpts:            conf.Query,
+		spec:                 conf.ServiceSpec,
+		client:               conf.Client.Health(),
+		balancer:             conf.Balancer,
+		prioritizedInstances: make([][]*api.ServiceEntry, 0, len(conf.FallbackDatacenters)),
+		init:                 make(chan struct{}),
+		initDone:             sync.Once{},
 	}
 
-	go resolver.populateFromConsul()
+	// Always prepend the local datacenter with the highest priority
+	for priority, dc := range append([]string{""}, conf.FallbackDatacenters...) {
+		go resolver.populateFromConsul(dc, priority)
+	}
 
 	return resolver, nil
 }
@@ -127,13 +133,14 @@ func (r *ServiceResolver) Resolve(ctx context.Context) (ServiceAddress, error) {
 	return ServiceAddress{Host: host, Port: port}, nil
 }
 
-func (r *ServiceResolver) populateFromConsul() {
+func (r *ServiceResolver) populateFromConsul(dcName string, dcPriority int) {
 	rl := ratelimit.New(1) // limit consul queries to 1 per second
 	bck := backoff.NewExponentialBackOff()
 	bck.MaxElapsedTime = 0
 	bck.MaxInterval = time.Second * 30
 
 	r.queryOpts.WaitIndex = 0
+	r.queryOpts.Datacenter = dcName
 	for r.ctx.Err() == nil {
 		rl.Take()
 		err := backoff.RetryNotify(
@@ -153,7 +160,18 @@ func (r *ServiceResolver) populateFromConsul() {
 					r.queryOpts.WaitIndex = uint64(math.Max(float64(1), float64(meta.LastIndex)))
 				}
 
-				r.balancer.UpdateTargets(se)
+				// Update the LB only if:
+				// - The DC has healthy nodes
+				// - No DC with higher priority has healthy nodes
+				r.mu.Lock()
+				r.prioritizedInstances[dcPriority] = se
+				for i := range r.prioritizedInstances {
+					if len(r.prioritizedInstances[i]) > 0 && dcPriority <= i {
+						r.balancer.UpdateTargets(r.prioritizedInstances[i])
+					}
+				}
+				r.mu.Unlock()
+
 				r.initDone.Do(func() {
 					close(r.init)
 				})

@@ -63,7 +63,7 @@ func TestConsulResolver(t *testing.T) {
 		init:      make(chan struct{}),
 		initDone:  sync.Once{},
 	}
-	go r.populateFromConsul()
+	go r.populateFromConsul("dc", 0)
 
 	expected := []ServiceAddress{{"localhost", 8080}, {"localhost2", 8081}}
 
