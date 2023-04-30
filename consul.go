@@ -71,6 +71,8 @@ func NewConsulResolver(ctx context.Context, conf ResolverConfig) (*ServiceResolv
 		conf.Log = log.Printf
 	}
 
+	datacenters := append([]string{""}, conf.FallbackDatacenters...)
+
 	resolver := &ServiceResolver{
 		log:                  conf.Log,
 		ctx:                  ctx,
@@ -78,13 +80,13 @@ func NewConsulResolver(ctx context.Context, conf ResolverConfig) (*ServiceResolv
 		spec:                 conf.ServiceSpec,
 		client:               conf.Client.Health(),
 		balancer:             conf.Balancer,
-		prioritizedInstances: make([][]*api.ServiceEntry, 0, len(conf.FallbackDatacenters)),
+		prioritizedInstances: make([][]*api.ServiceEntry, len(datacenters)),
 		init:                 make(chan struct{}),
 		initDone:             sync.Once{},
 	}
 
 	// Always prepend the local datacenter with the highest priority
-	for priority, dc := range append([]string{""}, conf.FallbackDatacenters...) {
+	for priority, dc := range datacenters {
 		go resolver.populateFromConsul(dc, priority)
 	}
 
@@ -168,6 +170,7 @@ func (r *ServiceResolver) populateFromConsul(dcName string, dcPriority int) {
 				for i := range r.prioritizedInstances {
 					if len(r.prioritizedInstances[i]) > 0 && dcPriority <= i {
 						r.balancer.UpdateTargets(r.prioritizedInstances[i])
+						break
 					}
 				}
 				r.mu.Unlock()
