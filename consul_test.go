@@ -54,14 +54,15 @@ func TestConsulResolver(t *testing.T) {
 
 	c := &MockClient{endpoints}
 	r := &ServiceResolver{
-		client:    c,
-		ctx:       context.Background(),
-		balancer:  &lb.RoundRobinLoadBalancer{},
-		spec:      ServiceSpec{ServiceName: "service"},
-		queryOpts: &api.QueryOptions{},
-		log:       log.Printf,
-		init:      make(chan struct{}),
-		initDone:  sync.Once{},
+		client:               c,
+		ctx:                  context.Background(),
+		balancer:             &lb.RoundRobinLoadBalancer{},
+		spec:                 ServiceSpec{ServiceName: "service"},
+		queryOpts:            &api.QueryOptions{},
+		prioritizedInstances: make([][]*api.ServiceEntry, 1),
+		log:                  log.Printf,
+		init:                 make(chan struct{}),
+		initDone:             sync.Once{},
 	}
 	go r.populateFromConsul("dc", 0)
 
