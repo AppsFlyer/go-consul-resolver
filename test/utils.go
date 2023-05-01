@@ -64,7 +64,7 @@ func deregisterServiceInConsul(name string, client *api.Client) error {
 	return client.Agent().ServiceDeregister(name)
 }
 
-func registerServiceInConsul(id int, name string, tags []string, client *api.Client) error { //nolint:unparam
+func registerServiceInConsul(id int, name string, tags []string, client *api.Client) error { //nolint:unparam too sensitive
 	return client.Agent().ServiceRegister(&api.AgentServiceRegistration{
 		ID:      fmt.Sprintf("%d", id),
 		Name:    name,
