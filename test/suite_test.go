@@ -20,7 +20,7 @@ import (
 
 const (
 	serviceName = "hello-service"
-	consulName  = "consul_1"
+	consulName  = "consul"
 	consulPort  = 8500
 )
 
@@ -28,7 +28,7 @@ type Suite struct {
 	suite.Suite
 	serviceContainers []testcontainers.Container
 	consulContainers  []testcontainers.Container
-	consulClient      *api.Client
+	consulClients     []*api.Client
 }
 
 func (s *Suite) SetupSuite() {
@@ -37,18 +37,21 @@ func (s *Suite) SetupSuite() {
 	if dockerNetwork == "" {
 		s.T().Fatal("could not determine docker network")
 	}
+	var dcs = []string{"dc1", "dc2"}
 
-	consulContainers := startConsulContainers(s.T(), dockerNetwork, []string{"dc1", "dc2"})
+	consulContainers := startConsulContainers(s.T(), dockerNetwork, dcs)
 	s.consulContainers = consulContainers
 
 	serviceContainers := startServiceContainers(s.T(), 3, dockerNetwork)
 	s.serviceContainers = append(s.serviceContainers, serviceContainers...)
 
-	consulClient, err := api.NewClient(&api.Config{Address: fmt.Sprintf("%s:%d", consulName, consulPort)})
-	if err != nil {
-		s.T().Fatal(err)
+	for i := range dcs {
+		client, err := api.NewClient(&api.Config{Address: fmt.Sprintf("%s_%d:%d", consulName, i, consulPort)})
+		if err != nil {
+			s.T().Fatal(err)
+		}
+		s.consulClients = append(s.consulClients, client)
 	}
-	s.consulClient = consulClient
 }
 
 func (s *Suite) TearDownSuite() {
@@ -64,35 +67,78 @@ func (s *Suite) TearDownSuite() {
 
 func (s *Suite) TearDownTest() {
 	for i := range s.serviceContainers {
-		if err := deregisterServiceInConsul(fmt.Sprintf("%d", i), s.consulClient); err != nil {
-			s.T().Fatal(err)
+		for _, c := range s.consulClients {
+			if err := deregisterServiceInConsul(fmt.Sprintf("%d", i), c); err != nil {
+				s.T().Fatal(err)
+			}
 		}
 	}
 }
 
-func (s *Suite) TestRoundRobinLoadBalancedClient() {
+func (s *Suite) TestDatacenterAwareLoadBalancedClient() {
 
-	for i := range s.serviceContainers {
-		if err := registerServiceInConsul(i, serviceName, nil, s.consulClient); err != nil {
+	// Register instances 0 and 1 in DC1, register service 2 in DC2
+
+	for i := 0; i < 2; i++ {
+		if err := registerServiceInConsul(i, serviceName, nil, s.consulClients[0]); err != nil {
 			s.T().Fatal(err)
 		}
 	}
+	if err := registerServiceInConsul(2, serviceName, nil, s.consulClients[1]); err != nil {
+		s.T().Fatal(err)
+	}
 
 	s.Assert().Eventually(func() bool {
-		svcs, _, err := s.consulClient.Catalog().Service(serviceName, "", nil)
+		svcs, _, err := s.consulClients[0].Catalog().Service(serviceName, "", nil)
 		return len(svcs) == 3 && err == nil
 	},
 		10*time.Second,
 		1*time.Second)
 
-	consulClient, _ := api.NewClient(&api.Config{Address: fmt.Sprintf("%s:%d", consulName, consulPort)})
+	coolServiceResolver, _ := consulresolver.NewConsulResolver(context.Background(), consulresolver.ResolverConfig{
+		Log: log.Printf,
+		ServiceSpec: consulresolver.ServiceSpec{
+			ServiceName: serviceName,
+		},
+		Balancer:            &lb.RoundRobinLoadBalancer{},
+		Client:              s.consulClients[0],
+		FallbackDatacenters: []string{"dc2"},
+	})
+
+	transport, _ := consulresolver.NewLoadBalancedTransport(
+		consulresolver.TransportConfig{
+			Resolvers: []consulresolver.Resolver{coolServiceResolver},
+			Log:       log.Printf,
+		})
+
+	client := &http.Client{Transport: transport}
+
+	results := s.executeServiceRequests(len(s.serviceContainers), client)
+	s.Assert().Equal(map[string]int{"0": 1, "1": 1, "2": 0}, results)
+}
+
+func (s *Suite) TestRoundRobinLoadBalancedClient() {
+
+	for i := range s.serviceContainers {
+		if err := registerServiceInConsul(i, serviceName, nil, s.consulClients[0]); err != nil {
+			s.T().Fatal(err)
+		}
+	}
+
+	s.Assert().Eventually(func() bool {
+		svcs, _, err := s.consulClients[0].Catalog().Service(serviceName, "", nil)
+		return len(svcs) == 2 && err == nil
+	},
+		10*time.Second,
+		1*time.Second)
+
 	coolServiceResolver, _ := consulresolver.NewConsulResolver(context.Background(), consulresolver.ResolverConfig{
 		Log: log.Printf,
 		ServiceSpec: consulresolver.ServiceSpec{
 			ServiceName: serviceName,
 		},
 		Balancer: &lb.RoundRobinLoadBalancer{},
-		Client:   consulClient,
+		Client:   s.consulClients[0],
 	})
 
 	transport, _ := consulresolver.NewLoadBalancedTransport(
@@ -111,26 +157,25 @@ func (s *Suite) TestTagAwareLoadBalancedClient() {
 
 	// Register each service with a different tag
 	for i := range s.serviceContainers {
-		if err := registerServiceInConsul(i, serviceName, []string{fmt.Sprintf("%d", i)}, s.consulClient); err != nil {
+		if err := registerServiceInConsul(i, serviceName, []string{fmt.Sprintf("%d", i)}, s.consulClients[0]); err != nil {
 			s.T().Fatal(err)
 		}
 	}
 
 	s.Assert().Eventually(func() bool {
-		svcs, _, err := s.consulClient.Catalog().Service(serviceName, "", nil)
+		svcs, _, err := s.consulClients[0].Catalog().Service(serviceName, "", nil)
 		return len(svcs) == 3 && err == nil
 	},
 		10*time.Second,
 		1*time.Second)
 
-	consulClient, _ := api.NewClient(&api.Config{Address: fmt.Sprintf("%s:%d", consulName, consulPort)})
 	coolServiceResolver, _ := consulresolver.NewConsulResolver(context.Background(), consulresolver.ResolverConfig{
 		Log: log.Printf,
 		ServiceSpec: consulresolver.ServiceSpec{
 			ServiceName: serviceName,
 		},
 		Balancer: &lb.TagAwareLoadBalancer{Tags: []string{"1"}, FallbackAllowed: true},
-		Client:   consulClient,
+		Client:   s.consulClients[0],
 	})
 
 	transport, _ := consulresolver.NewLoadBalancedTransport(
@@ -145,7 +190,7 @@ func (s *Suite) TestTagAwareLoadBalancedClient() {
 	s.Assert().Equal(map[string]int{"1": 3}, results)
 
 	// Deregister the service with tag "1" and assert that we fallback to round robin
-	if err := deregisterServiceInConsul("1", s.consulClient); err != nil {
+	if err := deregisterServiceInConsul("1", s.consulClients[0]); err != nil {
 		s.T().Fatal(err)
 	}
 
