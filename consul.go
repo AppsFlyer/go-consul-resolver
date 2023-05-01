@@ -169,10 +169,13 @@ func (r *ServiceResolver) populateFromConsul(dcName string, dcPriority int) {
 				// - No DC with higher priority has healthy nodes
 				r.mu.Lock()
 				r.prioritizedInstances[dcPriority] = se
-				for i := range r.prioritizedInstances {
-					if len(r.prioritizedInstances[i]) > 0 && dcPriority <= i {
+
+				for i := 0; i <= dcPriority; i++ {
+					if len(r.prioritizedInstances[i]) > 0 {
+						if dcPriority > i {
+							break
+						}
 						r.balancer.UpdateTargets(r.prioritizedInstances[i])
-						break
 					}
 				}
 				r.mu.Unlock()
