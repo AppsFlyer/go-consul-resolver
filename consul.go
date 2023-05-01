@@ -158,10 +158,10 @@ func (r *ServiceResolver) populateFromConsul(dcName string, dcPriority int) {
 				if err != nil {
 					return err
 				}
-				if meta.LastIndex < r.queryOpts.WaitIndex {
-					r.queryOpts.WaitIndex = 0
+				if meta.LastIndex < q.WaitIndex {
+					q.WaitIndex = 0
 				} else {
-					r.queryOpts.WaitIndex = uint64(math.Max(float64(1), float64(meta.LastIndex)))
+					q.WaitIndex = uint64(math.Max(float64(1), float64(meta.LastIndex)))
 				}
 
 				// Update the LB only if:
