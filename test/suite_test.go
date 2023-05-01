@@ -20,7 +20,7 @@ import (
 
 const (
 	serviceName = "hello-service"
-	consulName  = "consul_0"
+	consulName  = "consul_1"
 	consulPort  = 8500
 )
 
