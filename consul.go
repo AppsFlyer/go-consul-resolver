@@ -164,21 +164,9 @@ func (r *ServiceResolver) populateFromConsul(dcName string, dcPriority int) {
 					q.WaitIndex = uint64(math.Max(float64(1), float64(meta.LastIndex)))
 				}
 
-				// Update the LB only if:
-				// - The DC has healthy nodes
-				// - No DC with higher priority has healthy nodes
-				r.mu.Lock()
-				r.prioritizedInstances[dcPriority] = se
-
-				for i := 0; i <= dcPriority; i++ {
-					if len(r.prioritizedInstances[i]) > 0 {
-						if dcPriority > i {
-							break
-						}
-						r.balancer.UpdateTargets(r.prioritizedInstances[i])
-					}
+				if targets, shouldUpdate := r.getTargetsForUpdate(se, dcPriority); shouldUpdate {
+					r.balancer.UpdateTargets(targets)
 				}
-				r.mu.Unlock()
 
 				r.initDone.Do(func() {
 					close(r.init)
@@ -195,4 +183,32 @@ func (r *ServiceResolver) populateFromConsul(dcName string, dcPriority int) {
 		}
 	}
 	r.log("[Consul Resolver] context canceled, stopping consul watcher")
+}
+
+// getTargetsForUpdate will update the LB only if:
+// - The DC has healthy nodes
+// - No DC with higher priority has healthy nodes
+func (r *ServiceResolver) getTargetsForUpdate(se []*api.ServiceEntry, priority int) (res []*api.ServiceEntry, shouldUpdate bool) {
+	var found bool
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.prioritizedInstances[priority] = se
+	for i := 0; i <= len(r.prioritizedInstances)-1; i++ {
+		if len(r.prioritizedInstances[i]) > 0 {
+			found = true
+			if priority > i {
+				break
+			}
+			res = r.prioritizedInstances[i]
+			shouldUpdate = true
+			return
+		}
+	}
+
+	// If no DC has any nodes, return an empty slice and signal the caller that an update is needed
+	if !found {
+		shouldUpdate = true
+	}
+
+	return
 }

@@ -77,3 +77,110 @@ func TestConsulResolver(t *testing.T) {
 	}
 
 }
+
+func TestServiceResolver_getTargetsForUpdate(t *testing.T) {
+	r := &ServiceResolver{
+		prioritizedInstances: make([][]*api.ServiceEntry, 0),
+	}
+
+	type args struct {
+		se       []*api.ServiceEntry
+		priority int
+	}
+	tests := []struct {
+		state            [][]*api.ServiceEntry
+		name             string
+		args             args
+		wantTargets      []*api.ServiceEntry
+		wantShouldUpdate bool
+	}{
+		{
+			name: "highest priority nodes changed - should return input",
+			state: [][]*api.ServiceEntry{
+				{
+					{
+						Service: &api.AgentService{ID: "1"},
+					},
+				},
+				{
+					{
+						Service: &api.AgentService{ID: "2"},
+					},
+				},
+			},
+			args: args{
+				se:       []*api.ServiceEntry{{Service: &api.AgentService{ID: "1"}}, {Service: &api.AgentService{ID: "2"}}},
+				priority: 0,
+			},
+			wantTargets:      []*api.ServiceEntry{{Service: &api.AgentService{ID: "1"}}, {Service: &api.AgentService{ID: "2"}}},
+			wantShouldUpdate: true,
+		},
+		{
+			name: "has high priority nodes and lowest priority nodes changed - should return nil",
+			state: [][]*api.ServiceEntry{
+				{
+					{
+						Service: &api.AgentService{ID: "1"},
+					},
+				},
+				{
+					{
+						Service: &api.AgentService{ID: "2"},
+					},
+				},
+			},
+			args: args{
+				se:       []*api.ServiceEntry{{Service: &api.AgentService{ID: "1"}}, {Service: &api.AgentService{ID: "2"}}},
+				priority: 1,
+			},
+			wantTargets:      nil,
+			wantShouldUpdate: false,
+		},
+		{
+			name: "no high priority nodes left - should return low priority nodes",
+			state: [][]*api.ServiceEntry{
+				{
+					{
+						Service: &api.AgentService{ID: "1"},
+					},
+				},
+				{
+					{
+						Service: &api.AgentService{ID: "2"},
+					},
+				},
+			},
+			args: args{
+				se:       nil,
+				priority: 0,
+			},
+			wantTargets:      []*api.ServiceEntry{{Service: &api.AgentService{ID: "2"}}},
+			wantShouldUpdate: true,
+		},
+		{
+			name: "no nodes left - should return nil slice and true",
+			state: [][]*api.ServiceEntry{
+				{},
+				{
+					{
+						Service: &api.AgentService{ID: "2"},
+					},
+				},
+			},
+			args: args{
+				se:       nil,
+				priority: 1,
+			},
+			wantTargets:      nil,
+			wantShouldUpdate: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r.prioritizedInstances = tt.state
+			targets, shouldUpdate := r.getTargetsForUpdate(tt.args.se, tt.args.priority)
+			assert.Equalf(t, tt.wantTargets, targets, "getTargetsForUpdate(%v, %v)", tt.args.se, tt.args.priority)
+			assert.Equalf(t, tt.wantShouldUpdate, shouldUpdate, "getTargetsForUpdate(%v, %v)", tt.args.se, tt.args.priority)
+		})
+	}
+}
