@@ -3,6 +3,7 @@ package test
 import (
 	"context"
 	"fmt"
+	"github.com/google/uuid"
 	"io"
 	"log"
 	"net/http"
@@ -29,14 +30,23 @@ type Suite struct {
 	serviceContainers []testcontainers.Container
 	consulContainers  []testcontainers.Container
 	consulClients     []*api.Client
+	network           testcontainers.Network
 }
 
 func (s *Suite) SetupSuite() {
-
+	var isLocal bool
 	dockerNetwork := os.Getenv("DOCKER_NETWORK")
-	if dockerNetwork == "" {
-		s.T().Fatal("could not determine docker network")
+	isLocal = dockerNetwork == ""
+	if isLocal {
+		runID, _ := uuid.NewRandom()
+		dockerNetwork = runID.String()
+		network, err := createNetwork(dockerNetwork)
+		if err != nil {
+			s.T().Fatal("could not create docker network")
+		}
+		s.network = network
 	}
+
 	var dcs = []string{"dc1", "dc2"}
 
 	consulContainers := startConsulContainers(s.T(), dockerNetwork, dcs)
@@ -46,7 +56,15 @@ func (s *Suite) SetupSuite() {
 	s.serviceContainers = append(s.serviceContainers, serviceContainers...)
 
 	for i := range dcs {
-		client, err := api.NewClient(&api.Config{Address: fmt.Sprintf("%s_%d:%d", consulName, i, consulPort)})
+		host := fmt.Sprintf("consul_%d", i)
+		port := "8500"
+
+		if isLocal {
+			host = "localhost"
+			port = getContainerMappedPort(s.T(), s.consulContainers[i], "8500")
+		}
+
+		client, err := api.NewClient(&api.Config{Address: fmt.Sprintf("%s:%s", host, port)})
 		if err != nil {
 			s.T().Fatal(err)
 		}
@@ -90,7 +108,7 @@ func (s *Suite) TestDatacenterAwareLoadBalancedClient() {
 
 	s.Assert().Eventually(func() bool {
 		svcs, _, err := s.consulClients[0].Catalog().Service(serviceName, "", nil)
-		return len(svcs) == 3 && err == nil
+		return len(svcs) == 2 && err == nil
 	},
 		10*time.Second,
 		1*time.Second)
@@ -113,8 +131,8 @@ func (s *Suite) TestDatacenterAwareLoadBalancedClient() {
 
 	client := &http.Client{Transport: transport}
 
-	results := s.executeServiceRequests(len(s.serviceContainers), client)
-	s.Assert().Equal(map[string]int{"0": 1, "1": 1, "2": 0}, results)
+	results := s.executeServiceRequests(4, client)
+	s.Assert().Equal(map[string]int{"0": 2, "1": 2, "2": 0}, results)
 }
 
 func (s *Suite) TestRoundRobinLoadBalancedClient() {

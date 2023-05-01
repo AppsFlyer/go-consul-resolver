@@ -3,11 +3,28 @@ package test
 import (
 	"context"
 	"fmt"
+	"github.com/docker/go-connections/nat"
 	"testing"
 
 	"github.com/hashicorp/consul/api"
 	"github.com/testcontainers/testcontainers-go"
 )
+
+func createNetwork(name string) (testcontainers.Network, error) {
+	provider, err := testcontainers.NewDockerProvider()
+	if err != nil {
+		return nil, err
+	}
+
+	nreq := testcontainers.NetworkRequest{
+		Internal:   false,
+		Name:       name,
+		Attachable: true,
+		SkipReaper: true,
+	}
+
+	return provider.CreateNetwork(context.Background(), nreq)
+}
 
 func startConsulContainers(t *testing.T, network string, dcs []string) []testcontainers.Container {
 
@@ -72,4 +89,12 @@ func registerServiceInConsul(id int, name string, tags []string, client *api.Cli
 		Address: fmt.Sprintf("service_%d", id),
 		Tags:    tags,
 	})
+}
+
+func getContainerMappedPort(t *testing.T, c testcontainers.Container, port nat.Port) string {
+	p, err := c.MappedPort(context.Background(), port)
+	if err != nil {
+		t.Error(err)
+	}
+	return p.Port()
 }
