@@ -112,6 +112,13 @@ func (s *Suite) TestDatacenterAwareLoadBalancedClient() {
 		10*time.Second,
 		1*time.Second)
 
+	s.Assert().Eventually(func() bool {
+		svcs, _, err := s.consulClients[1].Catalog().Service(serviceName, "", nil)
+		return len(svcs) == 1 && err == nil
+	},
+		10*time.Second,
+		1*time.Second)
+
 	coolServiceResolver, _ := consulresolver.NewConsulResolver(context.Background(), consulresolver.ResolverConfig{
 		Log: log.Printf,
 		ServiceSpec: consulresolver.ServiceSpec{
