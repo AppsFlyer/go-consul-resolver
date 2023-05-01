@@ -151,7 +151,7 @@ func (s *Suite) TestRoundRobinLoadBalancedClient() {
 
 	s.Assert().Eventually(func() bool {
 		svcs, _, err := s.consulClients[0].Catalog().Service(serviceName, "", nil)
-		return len(svcs) == 2 && err == nil
+		return len(svcs) == 3 && err == nil
 	},
 		10*time.Second,
 		1*time.Second)
