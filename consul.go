@@ -141,8 +141,10 @@ func (r *ServiceResolver) populateFromConsul(dcName string, dcPriority int) {
 	bck.MaxElapsedTime = 0
 	bck.MaxInterval = time.Second * 30
 
-	r.queryOpts.WaitIndex = 0
-	r.queryOpts.Datacenter = dcName
+	q := *r.queryOpts
+
+	q.WaitIndex = 0
+	q.Datacenter = dcName
 	for r.ctx.Err() == nil {
 		rl.Take()
 		err := backoff.RetryNotify(
@@ -151,7 +153,7 @@ func (r *ServiceResolver) populateFromConsul(dcName string, dcPriority int) {
 					r.spec.ServiceName,
 					r.spec.Tags,
 					!r.spec.IncludeUnhealthy,
-					r.queryOpts,
+					&q,
 				)
 				if err != nil {
 					return err
