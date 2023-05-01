@@ -3,7 +3,7 @@ package test
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -20,14 +20,14 @@ import (
 
 const (
 	serviceName = "hello-service"
-	consulName  = "consul"
+	consulName  = "consul_0"
 	consulPort  = 8500
 )
 
 type Suite struct {
 	suite.Suite
 	serviceContainers []testcontainers.Container
-	consulContainer   testcontainers.Container
+	consulContainers  []testcontainers.Container
 	consulClient      *api.Client
 }
 
@@ -38,8 +38,8 @@ func (s *Suite) SetupSuite() {
 		s.T().Fatal("could not determine docker network")
 	}
 
-	consulContainer := startConsulContainer(s.T(), dockerNetwork)
-	s.consulContainer = consulContainer
+	consulContainers := startConsulContainers(s.T(), dockerNetwork, []string{"dc1", "dc2"})
+	s.consulContainers = consulContainers
 
 	serviceContainers := startServiceContainers(s.T(), 3, dockerNetwork)
 	s.serviceContainers = append(s.serviceContainers, serviceContainers...)
@@ -56,7 +56,10 @@ func (s *Suite) TearDownSuite() {
 	for i := 0; i < len(s.serviceContainers); i++ {
 		_ = s.serviceContainers[i].Terminate(ctx)
 	}
-	_ = s.consulContainer.Terminate(ctx)
+	for i := 0; i < len(s.consulContainers); i++ {
+		_ = s.consulContainers[i].Terminate(ctx)
+	}
+
 }
 
 func (s *Suite) TearDownTest() {
@@ -161,7 +164,7 @@ func (s *Suite) executeServiceRequests(num int, client *http.Client) map[string]
 		if err != nil {
 			s.T().Fatal(err)
 		}
-		bodyBytes, err := ioutil.ReadAll(res.Body)
+		bodyBytes, err := io.ReadAll(res.Body)
 		if err != nil {
 			s.T().Fatal(err)
 		}

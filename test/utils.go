@@ -9,16 +9,28 @@ import (
 	"github.com/testcontainers/testcontainers-go"
 )
 
-func startConsulContainer(t *testing.T, network string) testcontainers.Container {
-	req := &testcontainers.ContainerRequest{
-		Image:        "consul:1.9.5",
-		Env:          map[string]string{"CONSUL_BIND_INTERFACE": "eth0"},
-		ExposedPorts: []string{"8500"},
-		Networks:     []string{network},
-		Name:         "consul",
+func startConsulContainers(t *testing.T, network string, dcs []string) []testcontainers.Container {
+
+	containers := make([]testcontainers.Container, 0, len(dcs))
+	for i, dc := range dcs {
+		req := &testcontainers.ContainerRequest{
+			Image:        "consul:1.9.5",
+			Env:          map[string]string{"CONSUL_BIND_INTERFACE": "eth0"},
+			ExposedPorts: []string{"8500"},
+			Networks:     []string{network},
+			Name:         fmt.Sprintf("consul_%d", i),
+			Cmd:          []string{"agent", "-dev", fmt.Sprintf("-datacenter=%s", dc), "-client", "0.0.0.0"},
+		}
+		containers = append(containers, startContainer(t, req))
 	}
 
-	return startContainer(t, req)
+	// join consul datacenters
+	_, err := containers[0].Exec(context.Background(), []string{"consul", "join", "-wan", "consul_1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return containers
 }
 
 func startServiceContainers(t *testing.T, num int, network string) (res []testcontainers.Container) {
