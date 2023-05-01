@@ -3,7 +3,6 @@ package test
 import (
 	"context"
 	"fmt"
-	"github.com/google/uuid"
 	"io"
 	"log"
 	"net/http"
@@ -11,6 +10,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/google/uuid"
 
 	consulresolver "github.com/AppsFlyer/go-consul-resolver"
 	"github.com/AppsFlyer/go-consul-resolver/lb"
@@ -21,8 +22,6 @@ import (
 
 const (
 	serviceName = "hello-service"
-	consulName  = "consul"
-	consulPort  = 8500
 )
 
 type Suite struct {

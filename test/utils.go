@@ -3,8 +3,9 @@ package test
 import (
 	"context"
 	"fmt"
-	"github.com/docker/go-connections/nat"
 	"testing"
+
+	"github.com/docker/go-connections/nat"
 
 	"github.com/hashicorp/consul/api"
 	"github.com/testcontainers/testcontainers-go"
