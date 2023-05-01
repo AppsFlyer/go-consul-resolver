@@ -138,7 +138,7 @@ func (s *Suite) TestDatacenterAwareLoadBalancedClient() {
 	client := &http.Client{Transport: transport}
 
 	results := s.executeServiceRequests(4, client)
-	s.Assert().Equal(map[string]int{"0": 2, "1": 2, "2": 0}, results)
+	s.Assert().Equal(map[string]int{"0": 2, "1": 2}, results)
 }
 
 func (s *Suite) TestRoundRobinLoadBalancedClient() {
