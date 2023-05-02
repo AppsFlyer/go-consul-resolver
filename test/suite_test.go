@@ -95,7 +95,6 @@ func (s *Suite) TearDownTest() {
 func (s *Suite) TestDatacenterAwareLoadBalancedClient() {
 
 	// Register instances 0 and 1 in DC1, register service 2 in DC2
-
 	for i := 0; i < 2; i++ {
 		if err := registerServiceInConsul(i, serviceName, nil, s.consulClients[0]); err != nil {
 			s.T().Fatal(err)
@@ -139,6 +138,29 @@ func (s *Suite) TestDatacenterAwareLoadBalancedClient() {
 
 	results := s.executeServiceRequests(4, client)
 	s.Assert().Equal(map[string]int{"0": 2, "1": 2}, results)
+
+	// Deregister all instances in DC1, make sure requests now only reach DC2
+	for i := 0; i < 2; i++ {
+		if err := deregisterServiceInConsul(fmt.Sprintf("%d", i), s.consulClients[0]); err != nil {
+			s.T().Fatal(err)
+		}
+	}
+	// Wait for resolver to be notified
+	time.Sleep(1 * time.Second)
+
+	results = s.executeServiceRequests(4, client)
+	s.Assert().Equal(map[string]int{"2": 4}, results)
+
+	// Register service in DC1, make sure the requests now only reach DC1
+	if err := registerServiceInConsul(0, serviceName, nil, s.consulClients[0]); err != nil {
+		s.T().Fatal(err)
+	}
+
+	// Wait for resolver to be notified
+	time.Sleep(1 * time.Second)
+
+	results = s.executeServiceRequests(4, client)
+	s.Assert().Equal(map[string]int{"0": 4}, results)
 }
 
 func (s *Suite) TestRoundRobinLoadBalancedClient() {
