@@ -58,7 +58,9 @@ func (t *TestSuite) TestResolverSuccess() {
 	})
 	t.Assert().NoError(err)
 	client := &http.Client{Transport: tr}
-	client.Get("http://test-service/do/something") //nolint[:errcheck]
+	res, err := client.Get("http://test-service/do/something") //nolint:errcheck
+	t.Assert().NoError(err)
+	_ = res.Body.Close()
 	t.resolver.AssertExpectations(t.T())
 }
 
@@ -72,7 +74,9 @@ func (t *TestSuite) TestResolverUnknownService() {
 	})
 	t.Assert().NoError(err)
 	client := &http.Client{Transport: tr}
-	client.Get("http://other-service/do/something") //nolint[:errcheck]
+	res, err := client.Get("http://other-service/do/something") //nolint:errcheck
+	t.Assert().NoError(err)
+	_ = res.Body.Close()
 
 	t.resolver.AssertExpectations(t.T())
 }
@@ -87,7 +91,9 @@ func (t *TestSuite) TestResolverError() {
 	})
 	t.Assert().NoError(err)
 	client := &http.Client{Transport: tr}
-	client.Get("http://test-service/do/something") //nolint[:errcheck]
+	res, err := client.Get("http://test-service/do/something") //nolint:errcheck
+	t.Assert().NoError(err)
+	_ = res.Body.Close()
 
 	t.resolver.AssertExpectations(t.T())
 }
@@ -103,7 +109,9 @@ func (t *TestSuite) TestResolverFallbackOnError() {
 	})
 	t.Assert().NoError(err)
 	client := &http.Client{Transport: tr}
-	client.Get("http://test-service/do/something") //nolint[:errcheck]
+	res, err := client.Get("http://test-service/do/something") //nolint:errcheck
+	t.Assert().NoError(err)
+	_ = res.Body.Close()
 
 	t.resolver.AssertExpectations(t.T())
 }

@@ -16,7 +16,7 @@ type MockClient struct {
 	services []*api.ServiceEntry
 }
 
-func (c *MockClient) ServiceMultipleTags(service string, tags []string, passingOnly bool, q *api.QueryOptions) (
+func (c *MockClient) ServiceMultipleTags(_ string, _ []string, _ bool, q *api.QueryOptions) (
 	[]*api.ServiceEntry, *api.QueryMeta, error) {
 
 	var opts *api.QueryOptions
@@ -78,6 +78,7 @@ func TestConsulResolver(t *testing.T) {
 
 }
 
+//nolint:funlen
 func TestServiceResolver_getTargetsForUpdate(t *testing.T) {
 	r := &ServiceResolver{
 		prioritizedInstances: make([][]*api.ServiceEntry, 0),
@@ -176,6 +177,7 @@ func TestServiceResolver_getTargetsForUpdate(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
+		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			r.prioritizedInstances = tt.state
 			targets, shouldUpdate := r.getTargetsForUpdate(tt.args.se, tt.args.priority)

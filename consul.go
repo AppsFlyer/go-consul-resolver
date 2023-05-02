@@ -194,15 +194,16 @@ func (r *ServiceResolver) getTargetsForUpdate(se []*api.ServiceEntry, priority i
 	defer r.mu.Unlock()
 	r.prioritizedInstances[priority] = se
 	for i := 0; i <= len(r.prioritizedInstances)-1; i++ {
-		if len(r.prioritizedInstances[i]) > 0 {
-			found = true
-			if priority > i {
-				break
-			}
-			res = r.prioritizedInstances[i]
-			shouldUpdate = true
-			return
+		if len(r.prioritizedInstances[i]) == 0 {
+			continue
 		}
+		found = true
+		if priority > i {
+			break
+		}
+		res = r.prioritizedInstances[i]
+		shouldUpdate = true
+		return
 	}
 
 	// If no DC has any nodes, return an empty slice and signal the caller that an update is needed
