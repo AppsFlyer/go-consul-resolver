@@ -190,7 +190,7 @@ func (r *ServiceResolver) populateFromConsul(dcName string, dcPriority int) {
 // getTargetsForUpdate will update the LB only if:
 // - The DC has healthy nodes
 // - No DC with higher priority has healthy nodes
-func (r *ServiceResolver) getTargetsForUpdate(se []*api.ServiceEntry, priority int) (res []*api.ServiceEntry, shouldUpdate bool) {
+func (r *ServiceResolver) getTargetsForUpdate(se []*api.ServiceEntry, priority int) ([]*api.ServiceEntry, bool) {
 	sort.SliceStable(se, func(i, j int) bool {
 		return se[i].Node.ID < se[j].Node.ID
 	})
@@ -211,15 +211,14 @@ func (r *ServiceResolver) getTargetsForUpdate(se []*api.ServiceEntry, priority i
 		if priority > i {
 			break
 		}
-		res = r.prioritizedInstances[i]
-		shouldUpdate = true
-		return
+
+		return r.prioritizedInstances[i], true
 	}
 
 	// If no DC has any nodes, return an empty slice and signal the caller that an update is needed
 	if !found {
-		shouldUpdate = true
+		return se, true
 	}
 
-	return
+	return se, false
 }
