@@ -194,14 +194,15 @@ func (r *ServiceResolver) getTargetsForUpdate(se []*api.ServiceEntry, priority i
 	sort.SliceStable(se, func(i, j int) bool {
 		return se[i].Node.ID < se[j].Node.ID
 	})
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	var found bool
 	// check if the target list is unchanged
 	if reflect.DeepEqual(se, r.prioritizedInstances[priority]) {
 		return nil, false
 	}
-
-	var found bool
-	r.mu.Lock()
-	defer r.mu.Unlock()
 	r.prioritizedInstances[priority] = se
 	for i := 0; i <= len(r.prioritizedInstances)-1; i++ {
 		if len(r.prioritizedInstances[i]) == 0 {
