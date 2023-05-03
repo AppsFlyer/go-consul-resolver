@@ -93,5 +93,5 @@ service:
     - echo "here I can run custom commands, but no preparation needed for this repo"
 
 run:
-  skip-dirs:
-    - internal/dto
+  skip-files:
+    - consul_test.go
