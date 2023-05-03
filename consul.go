@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"log"
 	"math"
+	"reflect"
+	"sort"
 	"sync"
 	"time"
 
@@ -189,6 +191,14 @@ func (r *ServiceResolver) populateFromConsul(dcName string, dcPriority int) {
 // - The DC has healthy nodes
 // - No DC with higher priority has healthy nodes
 func (r *ServiceResolver) getTargetsForUpdate(se []*api.ServiceEntry, priority int) (res []*api.ServiceEntry, shouldUpdate bool) {
+	sort.SliceStable(se, func(i, j int) bool {
+		return se[i].Node.ID < se[j].Node.ID
+	})
+	// check if the target list is unchanged
+	if reflect.DeepEqual(se, r.prioritizedInstances[priority]) {
+		return nil, false
+	}
+
 	var found bool
 	r.mu.Lock()
 	defer r.mu.Unlock()
