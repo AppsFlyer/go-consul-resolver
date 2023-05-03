@@ -100,41 +100,41 @@ func TestServiceResolver_getTargetsForUpdate(t *testing.T) {
 			state: [][]*api.ServiceEntry{
 				{
 					{
-						Service: &api.AgentService{ID: "1"},
+						Node: &api.Node{ID: "1"},
 					},
 				},
 				{
 					{
-						Service: &api.AgentService{ID: "2"},
+						Node: &api.Node{ID: "2"},
 					},
 				},
 			},
 			args: args{
-				se:       []*api.ServiceEntry{{Service: &api.AgentService{ID: "1"}}, {Service: &api.AgentService{ID: "2"}}},
+				se:       []*api.ServiceEntry{{Node: &api.Node{ID: "1"}}, {Node: &api.Node{ID: "2"}}},
 				priority: 0,
 			},
-			wantTargets:      []*api.ServiceEntry{{Service: &api.AgentService{ID: "1"}}, {Service: &api.AgentService{ID: "2"}}},
+			wantTargets:      []*api.ServiceEntry{{Node: &api.Node{ID: "1"}}, {Node: &api.Node{ID: "2"}}},
 			wantShouldUpdate: true,
 		},
 		{
-			name: "has high priority nodes and lowest priority nodes changed - should return nil",
+			name: "has high priority nodes and lowest priority nodes changed - should return false",
 			state: [][]*api.ServiceEntry{
 				{
 					{
-						Service: &api.AgentService{ID: "1"},
+						Node: &api.Node{ID: "1"},
 					},
 				},
 				{
 					{
-						Service: &api.AgentService{ID: "2"},
+						Node: &api.Node{ID: "2"},
 					},
 				},
 			},
 			args: args{
-				se:       []*api.ServiceEntry{{Service: &api.AgentService{ID: "1"}}, {Service: &api.AgentService{ID: "2"}}},
+				se:       []*api.ServiceEntry{{Node: &api.Node{ID: "1"}}, {Node: &api.Node{ID: "2"}}},
 				priority: 1,
 			},
-			wantTargets:      nil,
+			wantTargets:      []*api.ServiceEntry{{Node: &api.Node{ID: "1"}}, {Node: &api.Node{ID: "2"}}},
 			wantShouldUpdate: false,
 		},
 		{
@@ -142,12 +142,12 @@ func TestServiceResolver_getTargetsForUpdate(t *testing.T) {
 			state: [][]*api.ServiceEntry{
 				{
 					{
-						Service: &api.AgentService{ID: "1"},
+						Node: &api.Node{ID: "1"},
 					},
 				},
 				{
 					{
-						Service: &api.AgentService{ID: "2"},
+						Node: &api.Node{ID: "2"},
 					},
 				},
 			},
@@ -155,7 +155,7 @@ func TestServiceResolver_getTargetsForUpdate(t *testing.T) {
 				se:       nil,
 				priority: 0,
 			},
-			wantTargets:      []*api.ServiceEntry{{Service: &api.AgentService{ID: "2"}}},
+			wantTargets:      []*api.ServiceEntry{{Node: &api.Node{ID: "2"}}},
 			wantShouldUpdate: true,
 		},
 		{
@@ -164,7 +164,7 @@ func TestServiceResolver_getTargetsForUpdate(t *testing.T) {
 				{},
 				{
 					{
-						Service: &api.AgentService{ID: "2"},
+						Node: &api.Node{ID: "2"},
 					},
 				},
 			},
