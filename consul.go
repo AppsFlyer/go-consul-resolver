@@ -3,13 +3,14 @@ package consulresolver
 import (
 	"context"
 	"fmt"
-	"github.com/mitchellh/mapstructure"
 	"log"
 	"math"
 	"reflect"
 	"sort"
 	"sync"
 	"time"
+
+	"github.com/mitchellh/mapstructure"
 
 	"github.com/AppsFlyer/go-consul-resolver/lb"
 	"github.com/cenkalti/backoff/v4"
