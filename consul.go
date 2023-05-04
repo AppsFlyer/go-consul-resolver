@@ -3,6 +3,7 @@ package consulresolver
 import (
 	"context"
 	"fmt"
+	"github.com/mitchellh/mapstructure"
 	"log"
 	"math"
 	"reflect"
@@ -16,6 +17,14 @@ import (
 	"github.com/hashicorp/consul/api"
 	"go.uber.org/ratelimit"
 )
+
+type agentConfig struct {
+	DC string `mapstructure:"Datacenter"`
+}
+
+type agentSelf struct {
+	Config agentConfig `mapstructure:"Config"`
+}
 
 // Balancer interface provides methods for selecting a target and updating its state
 type Balancer interface {
@@ -73,7 +82,23 @@ func NewConsulResolver(ctx context.Context, conf ResolverConfig) (*ServiceResolv
 		conf.Log = log.Printf
 	}
 
-	datacenters := append([]string{""}, conf.FallbackDatacenters...)
+	datacenters := []string{""}
+	if len(conf.FallbackDatacenters) > 0 {
+		seen := map[string]struct{}{}
+		// Exclude the local datacenter from the list of fallback datacenters
+		localDC, err := getLocalDatacenter(conf.Client.Agent())
+		if err != nil {
+			return nil, errors.Wrap(err, "failed determining local consul datacenter")
+		}
+
+		for _, dc := range conf.FallbackDatacenters {
+			if _, ok := seen[dc]; ok || dc == localDC {
+				continue
+			}
+			seen[dc] = struct{}{}
+			datacenters = append(datacenters, dc)
+		}
+	}
 
 	resolver := &ServiceResolver{
 		log:                  conf.Log,
@@ -222,4 +247,18 @@ func (r *ServiceResolver) getTargetsForUpdate(se []*api.ServiceEntry, priority i
 	}
 
 	return se, false
+}
+
+func getLocalDatacenter(c *api.Agent) (string, error) {
+	res, err := c.Self()
+	if err != nil {
+		return "", errors.Wrap(err, "failed querying agent")
+	}
+
+	var self agentSelf
+	if err := mapstructure.Decode(res, &self); err != nil {
+		return "", errors.Wrap(err, "failed decoding agent configuration")
+	}
+
+	return self.Config.DC, nil
 }
