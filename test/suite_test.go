@@ -104,6 +104,7 @@ func (s *Suite) TestDatacenterAwareLoadBalancedClient() {
 		s.T().Fatal(err)
 	}
 
+	// Wait for 2 instances to be registered in dc1
 	s.Assert().Eventually(func() bool {
 		svcs, _, err := s.consulClients[0].Catalog().Service(serviceName, "", nil)
 		return len(svcs) == 2 && err == nil
@@ -111,6 +112,7 @@ func (s *Suite) TestDatacenterAwareLoadBalancedClient() {
 		10*time.Second,
 		1*time.Second)
 
+	// Wait for 1 instance to be registered in dc2
 	s.Assert().Eventually(func() bool {
 		svcs, _, err := s.consulClients[1].Catalog().Service(serviceName, "", nil)
 		return len(svcs) == 1 && err == nil
@@ -135,6 +137,9 @@ func (s *Suite) TestDatacenterAwareLoadBalancedClient() {
 		})
 
 	client := &http.Client{Transport: transport}
+
+	// Wait for resolver to be notified
+	time.Sleep(1 * time.Second)
 
 	results := s.executeServiceRequests(4, client)
 	s.Assert().Equal(map[string]int{"0": 2, "1": 2}, results)
