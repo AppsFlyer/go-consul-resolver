@@ -27,7 +27,7 @@ func (t *TagAwareLoadBalancer) Select() (*api.ServiceEntry, error) {
 
 	for _, tag := range t.Tags {
 		if targets, ok := t.tagsMapping[tag]; ok && len(targets) > 0 {
-			return targets[rand.Intn(len(targets))], nil //nolint[:gosec]
+			return targets[rand.Intn(len(targets))], nil // nolint:gosec
 		}
 	}
 

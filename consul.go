@@ -5,8 +5,12 @@ import (
 	"fmt"
 	"log"
 	"math"
+	"reflect"
+	"sort"
 	"sync"
 	"time"
+
+	"github.com/mitchellh/mapstructure"
 
 	"github.com/AppsFlyer/go-consul-resolver/lb"
 	"github.com/cenkalti/backoff/v4"
@@ -14,6 +18,14 @@ import (
 	"github.com/hashicorp/consul/api"
 	"go.uber.org/ratelimit"
 )
+
+type agentConfig struct {
+	DC string `mapstructure:"Datacenter"`
+}
+
+type agentSelf struct {
+	Config agentConfig `mapstructure:"Config"`
+}
 
 // Balancer interface provides methods for selecting a target and updating its state
 type Balancer interface {
@@ -31,14 +43,16 @@ type ServiceProvider interface {
 }
 
 type ServiceResolver struct {
-	log       LogFn
-	ctx       context.Context
-	client    ServiceProvider
-	queryOpts *api.QueryOptions
-	balancer  Balancer
-	spec      ServiceSpec
-	init      chan struct{}
-	initDone  sync.Once
+	log                  LogFn
+	ctx                  context.Context
+	client               ServiceProvider
+	queryOpts            *api.QueryOptions
+	balancer             Balancer
+	spec                 ServiceSpec
+	prioritizedInstances [][]*api.ServiceEntry
+	mu                   sync.Mutex
+	init                 chan struct{}
+	initDone             sync.Once
 }
 
 // NewConsulResolver creates a new Consul Resolver
@@ -69,18 +83,40 @@ func NewConsulResolver(ctx context.Context, conf ResolverConfig) (*ServiceResolv
 		conf.Log = log.Printf
 	}
 
-	resolver := &ServiceResolver{
-		log:       conf.Log,
-		ctx:       ctx,
-		queryOpts: conf.Query,
-		spec:      conf.ServiceSpec,
-		client:    conf.Client.Health(),
-		balancer:  conf.Balancer,
-		init:      make(chan struct{}),
-		initDone:  sync.Once{},
+	datacenters := []string{""}
+	if len(conf.FallbackDatacenters) > 0 {
+		seen := map[string]struct{}{}
+		// Exclude the local datacenter from the list of fallback datacenters
+		localDC, err := getLocalDatacenter(conf.Client.Agent())
+		if err != nil {
+			return nil, errors.Wrap(err, "failed determining local consul datacenter")
+		}
+
+		for _, dc := range conf.FallbackDatacenters {
+			if _, ok := seen[dc]; ok || dc == localDC {
+				continue
+			}
+			seen[dc] = struct{}{}
+			datacenters = append(datacenters, dc)
+		}
 	}
 
-	go resolver.populateFromConsul()
+	resolver := &ServiceResolver{
+		log:                  conf.Log,
+		ctx:                  ctx,
+		queryOpts:            conf.Query,
+		spec:                 conf.ServiceSpec,
+		client:               conf.Client.Health(),
+		balancer:             conf.Balancer,
+		prioritizedInstances: make([][]*api.ServiceEntry, len(datacenters)),
+		init:                 make(chan struct{}),
+		initDone:             sync.Once{},
+	}
+
+	// Always prepend the local datacenter with the highest priority
+	for priority, dc := range datacenters {
+		go resolver.populateFromConsul(dc, priority)
+	}
 
 	return resolver, nil
 }
@@ -127,13 +163,16 @@ func (r *ServiceResolver) Resolve(ctx context.Context) (ServiceAddress, error) {
 	return ServiceAddress{Host: host, Port: port}, nil
 }
 
-func (r *ServiceResolver) populateFromConsul() {
+func (r *ServiceResolver) populateFromConsul(dcName string, dcPriority int) {
 	rl := ratelimit.New(1) // limit consul queries to 1 per second
 	bck := backoff.NewExponentialBackOff()
 	bck.MaxElapsedTime = 0
 	bck.MaxInterval = time.Second * 30
 
-	r.queryOpts.WaitIndex = 0
+	q := *r.queryOpts
+
+	q.WaitIndex = 0
+	q.Datacenter = dcName
 	for r.ctx.Err() == nil {
 		rl.Take()
 		err := backoff.RetryNotify(
@@ -142,18 +181,21 @@ func (r *ServiceResolver) populateFromConsul() {
 					r.spec.ServiceName,
 					r.spec.Tags,
 					!r.spec.IncludeUnhealthy,
-					r.queryOpts,
+					&q,
 				)
 				if err != nil {
 					return err
 				}
-				if meta.LastIndex < r.queryOpts.WaitIndex {
-					r.queryOpts.WaitIndex = 0
+				if meta.LastIndex < q.WaitIndex {
+					q.WaitIndex = 0
 				} else {
-					r.queryOpts.WaitIndex = uint64(math.Max(float64(1), float64(meta.LastIndex)))
+					q.WaitIndex = uint64(math.Max(float64(1), float64(meta.LastIndex)))
 				}
 
-				r.balancer.UpdateTargets(se)
+				if targets, shouldUpdate := r.getTargetsForUpdate(se, dcPriority); shouldUpdate {
+					r.balancer.UpdateTargets(targets)
+				}
+
 				r.initDone.Do(func() {
 					close(r.init)
 				})
@@ -169,4 +211,55 @@ func (r *ServiceResolver) populateFromConsul() {
 		}
 	}
 	r.log("[Consul Resolver] context canceled, stopping consul watcher")
+}
+
+// getTargetsForUpdate will update the LB only if:
+// - The DC has healthy nodes
+// - No DC with higher priority has healthy nodes
+func (r *ServiceResolver) getTargetsForUpdate(se []*api.ServiceEntry, priority int) ([]*api.ServiceEntry, bool) {
+	sort.SliceStable(se, func(i, j int) bool {
+		return se[i].Node.ID < se[j].Node.ID
+	})
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	var found bool
+	// check if the target list is unchanged
+	if reflect.DeepEqual(se, r.prioritizedInstances[priority]) {
+		return nil, false
+	}
+	r.prioritizedInstances[priority] = se
+	for i := 0; i <= len(r.prioritizedInstances)-1; i++ {
+		if len(r.prioritizedInstances[i]) == 0 {
+			continue
+		}
+		found = true
+		if priority > i {
+			break
+		}
+
+		return r.prioritizedInstances[i], true
+	}
+
+	// If no DC has any nodes, return an empty slice and signal the caller that an update is needed
+	if !found {
+		return se, true
+	}
+
+	return se, false
+}
+
+func getLocalDatacenter(c *api.Agent) (string, error) {
+	res, err := c.Self()
+	if err != nil {
+		return "", errors.Wrap(err, "failed querying agent")
+	}
+
+	var self agentSelf
+	if err := mapstructure.Decode(res, &self); err != nil {
+		return "", errors.Wrap(err, "failed decoding agent configuration")
+	}
+
+	return self.Config.DC, nil
 }

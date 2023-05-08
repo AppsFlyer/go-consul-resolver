@@ -64,4 +64,7 @@ type ResolverConfig struct {
 	// The consul query options configuration
 	// Optional
 	Query *api.QueryOptions
+	// A list of datacenters to query, ordered by priority.
+	// Optional. Will use only the local DC if not provided.
+	FallbackDatacenters []string
 }

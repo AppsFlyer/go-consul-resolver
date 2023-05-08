@@ -5,20 +5,50 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/docker/go-connections/nat"
+
 	"github.com/hashicorp/consul/api"
 	"github.com/testcontainers/testcontainers-go"
 )
 
-func startConsulContainer(t *testing.T, network string) testcontainers.Container {
-	req := &testcontainers.ContainerRequest{
-		Image:        "consul:1.9.5",
-		Env:          map[string]string{"CONSUL_BIND_INTERFACE": "eth0"},
-		ExposedPorts: []string{"8500"},
-		Networks:     []string{network},
-		Name:         "consul",
+func createNetwork(name string) (testcontainers.Network, error) {
+	provider, err := testcontainers.NewDockerProvider()
+	if err != nil {
+		return nil, err
 	}
 
-	return startContainer(t, req)
+	nreq := testcontainers.NetworkRequest{
+		Internal:   false,
+		Name:       name,
+		Attachable: true,
+		SkipReaper: true,
+	}
+
+	return provider.CreateNetwork(context.Background(), nreq)
+}
+
+func startConsulContainers(t *testing.T, network string, dcs []string) []testcontainers.Container {
+
+	containers := make([]testcontainers.Container, 0, len(dcs))
+	for i, dc := range dcs {
+		req := &testcontainers.ContainerRequest{
+			Image:        "consul:1.9.5",
+			Env:          map[string]string{"CONSUL_BIND_INTERFACE": "eth0"},
+			ExposedPorts: []string{"8500"},
+			Networks:     []string{network},
+			Name:         fmt.Sprintf("consul_%d", i),
+			Cmd:          []string{"agent", "-dev", fmt.Sprintf("-datacenter=%s", dc), "-client", "0.0.0.0"},
+		}
+		containers = append(containers, startContainer(t, req))
+	}
+
+	// join consul datacenters
+	_, err := containers[0].Exec(context.Background(), []string{"consul", "join", "-wan", "consul_1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return containers
 }
 
 func startServiceContainers(t *testing.T, num int, network string) (res []testcontainers.Container) {
@@ -52,7 +82,7 @@ func deregisterServiceInConsul(name string, client *api.Client) error {
 	return client.Agent().ServiceDeregister(name)
 }
 
-func registerServiceInConsul(id int, name string, tags []string, client *api.Client) error {
+func registerServiceInConsul(id int, name string, tags []string, client *api.Client) error { //nolint:unparam // too sensitive
 	return client.Agent().ServiceRegister(&api.AgentServiceRegistration{
 		ID:      fmt.Sprintf("%d", id),
 		Name:    name,
@@ -60,4 +90,12 @@ func registerServiceInConsul(id int, name string, tags []string, client *api.Cli
 		Address: fmt.Sprintf("service_%d", id),
 		Tags:    tags,
 	})
+}
+
+func getContainerMappedPort(t *testing.T, c testcontainers.Container, port nat.Port) string {
+	p, err := c.MappedPort(context.Background(), port)
+	if err != nil {
+		t.Error(err)
+	}
+	return p.Port()
 }

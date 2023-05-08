@@ -85,6 +85,12 @@ If set to true, the transport will attempt to resolve the address by delegating 
 
 * TLS - in order to support TLS, you can provide a custom Base `http.Transport` with the `ServerName` in it's `TLSClientConfig` set to the hostname presented by your certificate.
 
+### Multi-DC Support
+The library provides support for multiple data centers by specifying a list of fallback data-centers to use.  
+If no instances are available in the local data center, the library will select instances from one of the fallback data-centers, prioritized by the order of data-centers provided by the user in the `FallbackDatacenters` property of the `ResolverConfig` struct.
+
+
+
 # Example
 
 ```go
